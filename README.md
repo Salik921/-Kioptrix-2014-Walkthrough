@@ -134,13 +134,35 @@ Allow from env=allow_8080
 
 To access port 8080, I needed to change my browser's User-Agent to `Mozilla/4.0`.
 
-I installed a **User-Agent Switcher** browser plugin and set the User-Agent to:
+I used **Burp Suite** to intercept the request and manually modify the User-Agent header.
+
+**Steps:**
+
+1. Open Burp Suite and turn on **Intercept** under the Proxy tab
+2. Open the browser (configured to use Burp as proxy) and navigate to `http://192.168.1.123:8080/`
+3. Burp captures the request — you'll see something like:
 
 ```
-Mozilla/4.0
+GET / HTTP/1.1
+Host: 192.168.1.123:8080
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) ...
+Accept: text/html
+...
 ```
 
-After refreshing `http://192.168.1.123:8080/` — it worked! I could now see a directory listing with a folder named **phptax**.
+4. Change `Mozilla/5.0` to `Mozilla/4.0`:
+
+```
+GET / HTTP/1.1
+Host: 192.168.1.123:8080
+User-Agent: Mozilla/4.0
+Accept: text/html
+...
+```
+
+5. Click **Forward** to send the modified request
+
+The server accepted it and returned the directory listing with a folder named **phptax**. ✅
 
 **What is phptax?**
 
