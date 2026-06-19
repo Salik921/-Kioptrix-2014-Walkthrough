@@ -17,7 +17,7 @@ In this guide, I'll walk you through every step I took to identify and exploit t
 After booting up the Kioptrix machine, the first thing I did was use the `netdiscover` command to find its IP address on the network.
 
 ```bash
-netdiscover -r 192.168.1.0/24
+netdiscover
 ```
 
 This scanned my local subnet and returned the target machine's IP address — **192.168.1.123** (yours may differ depending on your setup).
