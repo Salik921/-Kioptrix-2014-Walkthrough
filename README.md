@@ -22,6 +22,9 @@ netdiscover
 
 This scanned my local subnet and returned the target machine's IP address — **192.168.1.123** (yours may differ depending on your setup).
 
+📸 Screenshot:
+https://github.com/Salik921/-Kioptrix-2014-Walkthrough/blob/25f173b7bc30acedb1d943c496b7a594a8ffed20/Screenshor/Screenshot%202026-06-16%20122153.png
+
 ---
 
 ## Step 2 — Port Scanning with Nmap
