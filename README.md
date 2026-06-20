@@ -65,6 +65,10 @@ Since HTTP is running on both ports, let's check the web pages.
 
 Opening `http://192.168.10.5 in the browser showed a basic default page — nothing interesting at first glance.
 
+📸 Screenshot:
+https://github.com/Salik921/-Kioptrix-2014-Walkthrough/blob/53502fb7762074291d1f99ac94d3700648fecabc/Screenshor/Screenshot%202026-06-16%20122418.png
+
+
 But before giving up, I always check the **page source code**. And there it was — a commented-out URL pointing to a **pChart** directory.
 
 ```
