@@ -71,6 +71,10 @@ https://github.com/Salik921/-Kioptrix-2014-Walkthrough/blob/53502fb7762074291d1f
 
 But before giving up, I always check the **page source code**. And there it was — a commented-out URL pointing to a **pChart** directory.
 
+📸 Screenshot:
+https://github.com/Salik921/-Kioptrix-2014-Walkthrough/blob/e9449a38cb73e42be547fd821aa1b5e70cceaecf/Screenshor/Screenshot%202026-06-16%20122532.png
+
+
 ```
 /pChart2.1.3/examples/index.php
 ```
@@ -88,6 +92,8 @@ Opening `http://192.168.10.5:8080` returned a **403 Forbidden** error.
 Interesting. Something is blocking access here. We'll come back to this.
 
 ---
+📸 Screenshot:
+https://github.com/Salik921/-Kioptrix-2014-Walkthrough/blob/e9449a38cb73e42be547fd821aa1b5e70cceaecf/Screenshor/Screenshot%202026-06-16%20122450.png
 
 ## Step 4 — Exploiting pChart 2.1.3 — Directory Traversal
 
