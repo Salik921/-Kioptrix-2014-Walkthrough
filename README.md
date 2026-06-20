@@ -32,12 +32,13 @@ https://github.com/Salik921/-Kioptrix-2014-Walkthrough/blob/25f173b7bc30acedb1d9
 Now that I had the IP, I ran an **aggressive scan** using Nmap to identify open ports and the services running on them.
 
 ```bash
-nmap -A 192.168.10.5
+nmap -sS -sV -sC -O 192.168.10.5
 ```
 
-**What is an Aggressive Scan?**
-
-The `-A` flag enables OS detection, version detection, script scanning, and traceroute all in one go. It gives a comprehensive picture of what the target is running.
+-sS = SYN scan (stealthy "half-open" port scan, the default and fastest TCP scan type)
+-sC = run default Nmap scripts against discovered ports (banner grabbing, basic vuln/info checks)
+-sV = detect service/version info running on open ports
+-O = attempt OS detection (guesses the target's operating system)
 
 **Results:**
 
@@ -47,6 +48,8 @@ PORT     STATE SERVICE VERSION
 80/tcp   open  http    Apache httpd
 8080/tcp open  http    Apache httpd
 ```
+📸 Screenshot:
+https://github.com/Salik921/-Kioptrix-2014-Walkthrough/blob/ab6a9f0d81fa44e14718775320de244d62bea989/Screenshor/Screenshot%202026-06-16%20122320.png
 
 Three ports were open:
 - **Port 80** — HTTP (web server)
